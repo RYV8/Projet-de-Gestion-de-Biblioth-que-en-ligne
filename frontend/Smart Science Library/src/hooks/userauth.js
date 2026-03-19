@@ -1,16 +1,20 @@
 // hooks/userauth.js
 import { useState, useEffect } from "react";
+import { apiFetch } from "../hooks/fetch.jsx";
 
-import { apiFetch } from "../hooks/fetch/";
-
+/**
+ * Auth hook backed by dj_rest_auth endpoints.
+ *
+ * Uses cookie-based session auth with CSRF handled by apiFetch.
+ */
 export default function useAuth() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  
   const fetchUser = async () => {
     try {
-      const data = await apiFetch("/accounts/user/");
+      // dj_rest_auth user details endpoint
+      const data = await apiFetch("auth/user/");
       setUser(data);
     } catch {
       setUser(null);
@@ -20,11 +24,10 @@ export default function useAuth() {
   };
 
   const login = async (email, password) => {
-    await getCsrf();
     try {
-      await apiFetch("/accounts/login/", {
+      await apiFetch("auth/login/", {
         method: "POST",
-        body: { login: email, password },
+        body: { email, password },
       });
       await fetchUser();
       return true;
@@ -34,14 +37,28 @@ export default function useAuth() {
   };
 
   const logout = async () => {
-    await getCsrf();
-    await apiFetch("/accounts/logout/", { method: "POST" });
-    setUser(null);
+    try {
+      await apiFetch("auth/logout/", { method: "POST" });
+    } finally {
+      setUser(null);
+    }
+  };
+
+  const register = async (payload) => {
+    try {
+      const data = await apiFetch("auth/registration/", {
+        method: "POST",
+        body: payload,
+      });
+      return { ok: true, data };
+    } catch (err) {
+      return { ok: false, error: err };
+    }
   };
 
   useEffect(() => {
     fetchUser();
   }, []);
 
-  return { user, loading, login, logout, fetchUser };
+  return { user, loading, login, logout, register, fetchUser };
 }

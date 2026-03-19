@@ -18,6 +18,8 @@ from rest_framework import status
 from rest_framework.exceptions import APIException
 import subprocess
 import json
+from pathlib import Path
+from django.conf import settings
 User =get_user_model()
 
 
@@ -91,9 +93,6 @@ def retirerLivre(request, *args, **kwargs):
         else:
             panieritems.delete()
             return Response({"success": "Livre retiré du panier."}, status=status.HTTP_200_OK)
-        
-        panieritems.delete()
-        return Response({"success": "Livre retiré du panier."}, status=status.HTTP_200_OK)
 
     except PanierItems.DoesNotExist:
         return Response({"error": "Livre non trouvé dans le panier."}, status=status.HTTP_404_NOT_FOUND)
@@ -223,17 +222,30 @@ class PasserCommandeView(APIView):
     def post(self,request, *args, **kwargs):
         panier = verifie_panier(request)
         try:
-            commande =Commande.objects.create(user =request.user, statuts ="EN_COURS")
-            commandeitems =CommandeItems.objects.create(commande =commande, commandeitems = panier)
-        
-            livre_id = PanierItems.objects.filter(panier= panier).last()
-            if not livre_id:
-                raise TabError("Ce livre n'est dans aucun panier ")
-            print(livre_id)
-            
-            Livre.objects.get(id =livre_id.livre).diminuer_stock()
-            email_confirm(subject= "Commande Passer avec succes. ELlle est en cours", user_id=request.user)
-            return f"La commande est en cours. Merci!!!!"
+            panier_items = PanierItems.objects.filter(panier=panier)
+            if not panier_items.exists():
+                return Response(
+                    {"error": "Votre panier est vide."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            commande = Commande.objects.create(user=request.user, statuts="EN_COURS")
+
+            # Lier le panier à la commande (structure existante)
+            CommandeItems.objects.create(commande=commande, commandeitems=panier)
+
+            for item in panier_items:
+                # Diminuer le stock pour chaque livre commandé
+                item.livre.diminuer_stock()
+
+            email_confirm(
+                subject="Commande passée avec succès. Elle est en cours.",
+                user_id=request.user.id,
+            )
+            return Response(
+                {"message": "La commande est en cours. Merci !"},
+                status=status.HTTP_201_CREATED,
+            )
         except Exception as e:
             raise APIException(f"Erreur: {e}")
     def get(self,request):
@@ -284,13 +296,19 @@ class listCommande(APIView):
         
 
 def call_kkiapay_verify(reference):
-    # Chemin absolu vers le script et le python du venv kkiapay
-    kkiapay_python = "backend/SmartScienceLibrary/kkiapay_service/env2/bin/python"
-    kkiapay_script = "backend/SmartScienceLibrary/kkiapay_service/kkiapay.py"
+    """
+    Appelle le script Kkiapay pour vérifier une transaction.
+
+    Les chemins sont construits à partir de BASE_DIR pour plus de robustesse.
+    """
+    base_dir = Path(settings.BASE_DIR)
+    kkiapay_python = base_dir / "kkiapay_service" / "env2" / "bin" / "python"
+    kkiapay_script = base_dir / "kkiapay_service" / "kkiapay.py"
     
     result = subprocess.run(
-        [kkiapay_python, kkiapay_script, reference],
-        capture_output=True, text=True
+        [str(kkiapay_python), str(kkiapay_script), reference],
+        capture_output=True,
+        text=True,
     )
     return json.loads(result.stdout)
 
@@ -301,10 +319,15 @@ class DOAchat(APIView):
         APIView (POST): encoieyer la référence de l'achat dasn la fonction fetch
     """
     def post(self, request, *args, **kwargs):
-        user = request.user 
+        user = request.user
         try:
-            commande = Commande.objects.filter(user=user)
-           
+            commande = Commande.objects.filter(user=user).last()
+            if not commande:
+                return Response(
+                    {"error": "Aucune commande trouvée pour cet utilisateur."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
             reference = request.data.get("reference")  # le ref de la transaction envoyé par le front
             if not reference:
                 return Response({"error": "Le champ 'reference' est requis."}, status=status.HTTP_400_BAD_REQUEST)
@@ -312,11 +335,10 @@ class DOAchat(APIView):
             print("commande faites")
            
             if transaction_info['status'] == "SUCCESS":
-                achat =Achat.objects.create(user =user, commande =commande,statuts="SUCCESS" )
-                data= AchatSerializer(achat)
+                achat = Achat.objects.create(user=user, commande=commande, statuts="SUCCESS")
+                data = AchatSerializer(achat).data
                 return Response(data, status=status.HTTP_200_OK)
             return Response(data={"Erreur":"transaction nons effectué", "satut_kkiapay":transaction_info["status"]}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             
             raise APIException(f"Erreur : {e}")
-        return Response(transaction_info)

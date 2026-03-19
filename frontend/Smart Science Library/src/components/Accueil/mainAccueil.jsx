@@ -16,16 +16,32 @@ import {
 export function MainAccueil() {
   const [livrecount, setLivrescount] = useState(0);
   const [empruntcount, setEmpruntcount] = useState(0);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [error, setError] = useState(null);
   useEffect(() => {
-    fetch("http://localhost:8000/api/livres/list/")
-      .then((res) => res.json())
-      .then((data) => setLivrescount(data.length))
-      .catch(console.error);
+    async function loadStats() {
+      try {
+        setError(null);
+        setLoadingStats(true);
+        const [livresRes, empruntRes] = await Promise.all([
+          fetch("http://localhost:8000/api/livres/list/").then((res) =>
+            res.json()
+          ),
+          fetch(
+            "http://localhost:8000/api/livregestions/nombre_emprunt/"
+          ).then((res) => res.json()),
+        ]);
+        setLivrescount(Array.isArray(livresRes) ? livresRes.length : 0);
+        setEmpruntcount(empruntRes?.total_emprunts ?? 0);
+      } catch (e) {
+        console.error(e);
+        setError("Impossible de charger les statistiques pour le moment.");
+      } finally {
+        setLoadingStats(false);
+      }
+    }
 
-    fetch("http://localhost:8000/api/livregestions/nombre_emprunt/")
-      .then((response) => response.json())
-      .then((data) => setEmpruntcount(data.total_emprunts))
-      .catch(console.error);
+    loadStats();
   }, []);
 
   return (
@@ -59,7 +75,7 @@ export function MainAccueil() {
       <div className="lg:flex md:flex justify-center mt-6 gap-10 font-bold opacity-80 ">
         <div className="  shadow-2xl align-center justify-center  shadow-green-300   p-10 hover:scale-3d bg-gray-100 border-gray-300  border rounded-xl items-center flex flex-col  gap-px ">
           <BookOpen size={32} className="text-green-700" />
-          <p> {livrecount}+</p>
+          <p>{loadingStats ? "..." : `${livrecount}+`}</p>
           <p className="text-gray-600 text-xs">Livres disponibles</p>
         </div>
         <div className="shadow-2xl align-center justify-center  shadow-green-300   p-10 hover:scale-3d bg-gray-100 border-gray-300  border rounded-xl items-center flex flex-col  gap-px">
@@ -70,7 +86,7 @@ export function MainAccueil() {
         </div>
         <div className=" sshadow-2xl align-center justify-center  shadow-green-300   p-10 hover:scale-3d bg-gray-100 border-gray-300  border rounded-xl items-center flex flex-col  gap-px">
           <TrendingUp size={32} className="text-green-700" />
-          <p>{empruntcount}+</p>
+          <p>{loadingStats ? "..." : `${empruntcount}+`}</p>
           <p className="text-gray-600 text-xs">Emprunté ce mois</p>
         </div>
         <div className=" shadow-2xl align-center justify-center  shadow-green-300   p-10 hover:scale-3d bg-gray-100 border-gray-300  border rounded-xl items-center flex flex-col  gap-px">
@@ -79,6 +95,12 @@ export function MainAccueil() {
           <p className="text-gray-600 text-xs">Note moyenne</p>
         </div>
       </div>
+
+      {error && (
+        <p className="mt-4 text-sm text-red-600 text-center">
+          {error}
+        </p>
+      )}
 
       <section className="flex flex-col place-items-center  p-10 m-4 ">
         <div className="flex flex-col justify-center items-center">

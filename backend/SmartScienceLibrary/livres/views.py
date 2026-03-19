@@ -90,8 +90,8 @@ class RetrieveUpdateDeleteCategorieView(RetrieveUpdateDestroyAPIView):
     Réservé aux administrateurs.
     """
     permission_classes=[ IsAdminUser]
-    queryset = Livre.objects.all()
-    serializer_class =LivresSerializer
+    queryset = Categorie.objects.all()
+    serializer_class = CategorieSerializer
 # commenter un livre
 
 class AddCOmment(CreateAPIView):
