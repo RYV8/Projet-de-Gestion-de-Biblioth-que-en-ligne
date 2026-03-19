@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { getCookie } from "../utils/csrf/";
 
-const API_URL = "http://localhost:8000/api/";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/";
 
 export async function apiFetch(
   endpoint,

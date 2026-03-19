@@ -1,0 +1,16 @@
+# Backend and frontend environment files
+backend/SmartScienceLibrary/.env
+backend/.env
+frontend/Smart Science Library/.env
+frontend/Smart Science Library/.env.*
+
+# Python cache / bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Local virtual environments
+env/
+venv/
+.venv/
+backend/env/

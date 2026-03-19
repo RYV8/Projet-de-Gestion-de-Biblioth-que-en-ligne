@@ -11,21 +11,45 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
-import os 
+import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+def _load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
+def _split_env(value: str) -> list[str]:
+    if not value:
+        return []
+    return [item for item in value.replace(",", " ").split() if item]
+
+# Load env values from backend folder if present.
+_load_env_file(BASE_DIR / ".env")
+_load_env_file(BASE_DIR.parent / ".env")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-&&=v_kcpxt1z15_ui5(53x5fpx^_o8l2kfgvia1@1m%n-9iy5+'
+SECRET_KEY = os.getenv(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-&&=v_kcpxt1z15_ui5(53x5fpx^_o8l2kfgvia1@1m%n-9iy5+",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = _split_env(os.getenv("DJANGO_ALLOWED_HOSTS", ""))
 AUTH_USER_MODEL = 'userauth.User'
 
 # Application definition
@@ -83,13 +107,6 @@ REST_FRAMEWORK = {
         
     ),
 }
-REST_AUTH_REGISTER_SERIALIZERS = {
-    'SIGNUP_FIELDS': {
-        'username': {'required': True},
-        'first_name': {'required': True},
-        'email': {'required': True},
-    }
-}
 SITE_ID = 1
 
 SOCIALACCOUNT_PROVIDERS = {
@@ -142,13 +159,14 @@ SOCIALACCOUNT_PROVIDERS = {
 
 # EMAIL CONFIGURATION
 
-EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend'
-
-EMAIL_HOST= None
-EMAIL_PORT = None
-EMAIL_HOST_USER ="vossanouroamric@gmail.com"
-EMAIL_HOST_PASSWORD = 'mypasword'
-EMAIL_USE_TLS =None
+EMAIL_BACKEND = os.getenv(
+    "DJANGO_EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
+)
+EMAIL_HOST = os.getenv("DJANGO_EMAIL_HOST", "")
+EMAIL_PORT = int(os.getenv("DJANGO_EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("DJANGO_EMAIL_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("DJANGO_EMAIL_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("DJANGO_EMAIL_USE_TLS", "True").lower() == "true"
 
 ##############################################################
 AUTHENTICATION_BACKENDS = [
@@ -176,25 +194,27 @@ MIDDLEWARE = [
    
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  
-    "http://127.0.0.1:5173",
-]
+CORS_ALLOWED_ORIGINS = os.getenv(
+    "DJANGO_CORS_ALLOWED_ORIGINS",
+    "http://localhost:5173 http://127.0.0.1:5173",
+)
+CORS_ALLOWED_ORIGINS = _split_env(CORS_ALLOWED_ORIGINS)
 # CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 # CSRF
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+CSRF_TRUSTED_ORIGINS = os.getenv(
+    "DJANGO_CSRF_TRUSTED_ORIGINS",
+    "http://localhost:5173 http://127.0.0.1:5173",
+)
+CSRF_TRUSTED_ORIGINS = _split_env(CSRF_TRUSTED_ORIGINS)
 
-# Cookies sécurisés (mettre True en production)elle permet d'envoyer les cookie seulement en https si ele est a True
-SESSION_COOKIE_SECURE = False
-CSRF_COOKIE_SECURE = False
+# Cookies sécurisés (mettre True en production) elle permet d'envoyer les cookies seulement en HTTPS si elle est à True
+SESSION_COOKIE_SECURE = os.getenv("DJANGO_SESSION_COOKIE_SECURE", "False").lower() == "true"
+CSRF_COOKIE_SECURE = os.getenv("DJANGO_CSRF_COOKIE_SECURE", "False").lower() == "true"
 
 # Cookies envoyés sur cross-site
-SESSION_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = os.getenv("DJANGO_SESSION_COOKIE_SAMESITE", "Lax")
+CSRF_COOKIE_SAMESITE = os.getenv("DJANGO_CSRF_COOKIE_SAMESITE", "Lax")
 
 
 # Méthodes HTTP permises
@@ -247,9 +267,13 @@ WSGI_APPLICATION = 'SmartScienceLibrary.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    "default": {
+        "ENGINE": os.getenv("DJANGO_DB_ENGINE", "django.db.backends.sqlite3"),
+        "NAME": os.getenv("DJANGO_DB_NAME", BASE_DIR / "db.sqlite3"),
+        "USER": os.getenv("DJANGO_DB_USER", ""),
+        "PASSWORD": os.getenv("DJANGO_DB_PASSWORD", ""),
+        "HOST": os.getenv("DJANGO_DB_HOST", ""),
+        "PORT": os.getenv("DJANGO_DB_PORT", ""),
     }
 }
 
@@ -288,14 +312,19 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
-STATIC_URL = 'static/'
-STATICFILES_DIRS=[os.path.join(BASE_DIR ,"static")]
+STATIC_URL = "static/"
+STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
+STATIC_ROOT = os.getenv("DJANGO_STATIC_ROOT", os.path.join(BASE_DIR, "staticfiles"))
 
-MEDIA_URL='media/'
-MEDIA_ROOT = os.path.join(BASE_DIR /'media/')
+MEDIA_URL = "media/"
+MEDIA_ROOT = os.getenv("DJANGO_MEDIA_ROOT", os.path.join(BASE_DIR, "media"))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Kkiapay configuration (used by livregestions)
+KKIAPAY_PUBLIC_KEY = os.getenv("KKIAPAY_PUBLIC_KEY", "")
+KKIAPAY_PRIVATE_KEY = os.getenv("KKIAPAY_PRIVATE_KEY", "")
+KKIAPAY_SECRET = os.getenv("KKIAPAY_SECRET", "")
